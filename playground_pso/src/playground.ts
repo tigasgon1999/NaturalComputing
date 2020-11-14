@@ -929,7 +929,7 @@ function optimize_through_GA() {
 console.log("In GA")
 const cross_prob = 0.9
 var mutationPr = 0.15
-const noIter = 50
+const noIter = 20
 const pop_size = 16
 const no_best_to_show = 16
 const no_epochs = 2
@@ -966,7 +966,7 @@ Gene.prototype.encode = function(phenotype) {
 //calculates the fitness function of the gene => replace this with fitness loss function feedforward from nn.
 Gene.prototype.calcFitness = function() {
     var scope = this;
-    console.log("Fitness for: ", this.genotype);
+    //console.log("Fitness for: ", this.genotype);
 
     //initialize NN structure
     state.numHiddenLayers = this.genotype.length-2;
@@ -1029,7 +1029,7 @@ Gene.prototype.calcFitness = function() {
     }
     lossTrain = getLoss(network, trainData);
     lossTest = getLoss(network, testData);
-    console.log("Fitness for this individ: -"+lossTest);
+    //console.log("Fitness for this individ: -"+lossTest);
     this.fitness = - lossTest;
 
 
@@ -1336,7 +1336,7 @@ function init(){
 function display(){
   var fitness = document.getElementById('fitness');
   //print the best total Survival point and the corresponding genotype:
-  fitness.innerHTML = 'Survival Points:' + population.genes[0].fitness;
+  fitness.innerHTML = 'Best fitness:' + population.genes[0].fitness;
   fitness.innerHTML += '<br/>Genotype:' + population.genes[0].genotype;
   let sum = 0;
   for(var j=0; j<no_best_to_show; j++)
@@ -1361,6 +1361,51 @@ function display(){
     y: history_fitness_average,
     type: 'scatter'
   }];
+  
+  var layout_max = {
+    width: 1000,
+    height: 300,
+    title: "Evolution of the highest fitness on each generation",
+    xaxis: {
+      title: "Generation number",
+      titlefont: {
+        family: "Courier New, monospace",
+        size: 18,
+        color: "#7f7f7f"
+      }
+    },
+    yaxis: {
+      title: "Fitness value",
+      titlefont: {
+        family: "Courier New, monospace",
+        size: 18,
+        color: "#7f7f7f"
+      }
+    }
+  };
+
+    
+  var layout_avg = {
+    width: 1000,
+    height: 300,
+    title: "Evolution of the average fitness over the population on each generation",
+    xaxis: {
+      title: "Generation number",
+      titlefont: {
+        family: "Courier New, monospace",
+        size: 18,
+        color: "#7f7f7f"
+      }
+    },
+    yaxis: {
+      title: "Fitness value",
+      titlefont: {
+        family: "Courier New, monospace",
+        size: 18,
+        color: "#7f7f7f"
+      }
+    }
+  };
 
 
   var data_max = trace1;
@@ -1369,10 +1414,10 @@ function display(){
   // {
   //   mutationPr = mutationPr / 1.5;
   // }
-  Plotly.newPlot('Performance_max', data_max);
+  Plotly.newPlot('Performance_max', data_max, layout_max);
 
   var data_average = trace2;
-  Plotly.newPlot('Performance_average', data_average);
+  Plotly.newPlot('Performance_average', data_average, layout_avg);
 
   context.clearRect(0, 0, canvas.width, canvas.height); //clear the canvas
   var index = 0;
