@@ -932,7 +932,7 @@ var mutationPr = 0.15
 const noIter = 20
 const pop_size = 16
 const no_best_to_show = 16
-const no_epochs = 2
+const no_epochs = 2 
 
 //Returns an integer random number between min (included) and max (included):
 function randomInteger(min, max) {
@@ -1030,7 +1030,8 @@ Gene.prototype.calcFitness = function() {
     lossTrain = getLoss(network, trainData);
     lossTest = getLoss(network, testData);
     //console.log("Fitness for this individ: -"+lossTest);
-    this.fitness = - lossTest;
+    //this.fitness = - lossTest;
+    this.fitness = -(lossTrain + 0.001 * Math.abs(lossTrain-lossTest))
 
 
     //console.log(this.genotype);
