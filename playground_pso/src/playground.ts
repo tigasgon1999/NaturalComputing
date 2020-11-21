@@ -335,6 +335,7 @@ function makeGUI() {
 
   let activationDropdown = d3.select("#activations").on("change", function() {
     state.activation = activations[this.value];
+    state.activations = []
     parametersChanged = true;
     reset();
   });
@@ -928,11 +929,11 @@ function constructInput(x: number, y: number): number[] {
 function optimize_through_GA() {
 console.log("In GA")
 const cross_prob = 0.9
-var mutationPr = 0.15
-const noIter = 20
+var mutationPr = 0.2
+const noIter = 25
 const pop_size = 16
 const no_best_to_show = 16
-const no_epochs = 2 
+const no_epochs = 5
 
 //Returns an integer random number between min (included) and max (included):
 function randomInteger(min, max) {
@@ -946,11 +947,22 @@ var Item = function(num_hidden_layers, shape) {
   }
 
 var items = [];
-items.push(new Item(1, [2,1,1]));
-items.push(new Item(1, [2,2,1]));
-items.push(new Item(1, [2,3,1]));
-items.push(new Item(2, [2,5,1]));
-items.push(new Item(2, [2,4,1]));
+items.push(new Item(1, [[2,"rbf"],[1,"rbf"],[1,"sigmoid"]]));
+items.push(new Item(1, [[2,"rbf"],[2,"rbf"],[1,"sigmoid"]]));
+items.push(new Item(1, [[2,"rbf"],[3,"rbf"],[1,"sigmoid"]]));
+items.push(new Item(1, [[2,"rbf"],[5,"rbf"],[1,"sigmoid"]]));
+items.push(new Item(1, [[2,"rbf"],[4,"rbf"],[1,"sigmoid"]]));
+let activations = ['relu', 'tanh', 'sin', 'rbf', 'sigmoid']
+let best_indivi_length = []
+
+var string_to_act = {
+  'relu': nn.Activations.RELU,
+  "tanh": nn.Activations.TANH,
+  'sin': nn.Activations.SIN,
+  'rbf': nn.Activations.RBF,
+  'sigmoid': nn.Activations.SIGMOID,
+  'linear' : nn.Activations.LINEAR
+};
 
 // genotype
 var Gene = function() {
@@ -970,15 +982,21 @@ Gene.prototype.calcFitness = function() {
 
     //initialize NN structure
     state.numHiddenLayers = this.genotype.length-2;
-    for(let i=0;i< state.numHiddenLayer;i++)
+    state.activations = [];
+    for(let i=0;i<state.numHiddenLayer;i++)
     {
-      state.networkShape[i] = this.genotype[i+1];
+      state.networkShape[i] = this.genotype[i+1][0];
+    }
+    for(let i = 0; i < this.genotype.length-1;i++)
+    {
+      state.activations.push(string_to_act[this.genotype[i][1]]);
     }
     //clear all inputs
     for (let nodeId in INPUTS)
     {
       state[nodeId] = false;
     }
+    //console.log("Hidden layers: ", state.numHiddenLayers);
     state['x'] = true;
     state['y'] = true;
     if(this.genotype[0] == 4)
@@ -1030,8 +1048,7 @@ Gene.prototype.calcFitness = function() {
     lossTrain = getLoss(network, trainData);
     lossTest = getLoss(network, testData);
     //console.log("Fitness for this individ: -"+lossTest);
-    //this.fitness = - lossTest;
-    this.fitness = -(lossTrain + 0.001 * Math.abs(lossTrain-lossTest))
+    this.fitness = - lossTest;
 
 
     //console.log(this.genotype);
@@ -1077,9 +1094,11 @@ Gene.prototype.onePointCrossOver = function(crossOverPr, anotherGene) {
         offSpring1.genotype = this.genotype;
         offSpring2.genotype = this.genotype;
         //this encourages exploration
-        offSpring1.genotype[1] = Math.floor((this.genotype[1] + anotherGene.genotype[1]) / 2)
+        offSpring1.genotype[1][0] = Math.floor((this.genotype[1][0] + anotherGene.genotype[1][0]) / 2)
+        offSpring1.genotype[1][1] = this.fitness > anotherGene.fitness ? this.genotype[1][1] : anotherGene.genotype[1][1];
         //this is greedier
-        offSpring2.genotype[1] = this.fitness > anotherGene.fitness ? this.genotype[1] : anotherGene.genotype[1];//Math.floor(Math.abs(this.fitness) * this.genotype[1] + (1-Math.abs(anotherGene.fitness)) * anotherGene.genotype[1])
+        offSpring2.genotype[1][0] = this.fitness > anotherGene.fitness ? this.genotype[1][0] : anotherGene.genotype[1][0];//Math.floor(Math.abs(this.fitness) * this.genotype[1] + (1-Math.abs(anotherGene.fitness)) * anotherGene.genotype[1])
+        offSpring2.genotype[1][1] = this.fitness > anotherGene.fitness ? this.genotype[1][1] : anotherGene.genotype[1][1];
         return [offSpring1, offSpring2];
       }
       else //one point crossover
@@ -1148,7 +1167,7 @@ Gene.prototype.mutate = function() {
               {
                 if (this.genotype.length < 8) //max 8 layers
                 {
-                  this.genotype.splice(1, 0, 2);
+                  this.genotype.splice(1, 0, [4,'rbf']);
                 }
                 else
                 {
@@ -1161,7 +1180,7 @@ Gene.prototype.mutate = function() {
             else
             {
                 //if array on length 3 (minimum), then add a layer
-                this.genotype.splice(1, 0, 2); //adding a layer with 4 neurons
+                this.genotype.splice(1, 0, [4,'rbf']); //adding a layer with 4 neurons
             }
             already_mutated_dim = true;
         }
@@ -1171,42 +1190,46 @@ Gene.prototype.mutate = function() {
             //special case when we are on input layer (can be wither 2 or 4 - for sinX)
             if (index == 0)
             {
-                if (this.genotype[0] == 4)
+                if (this.genotype[0][0] == 4)
                 {
-                  this.genotype[0] == 2
+                  this.genotype[0][0] == 2
                 }
                 else
                 {
-                  this.genotype[0] = 4
+                  this.genotype[0][0] = 4
                 }
 
             }
             else //if the index is on a hidden layer, increase or decrease the value by one
             {
-                if (this.genotype[index] < 8 && this.genotype[index] > 1)
+                if (this.genotype[index][0] < 8 && this.genotype[index][0] > 1)
                 {
                     if (Math.random() >= 0.5)
                     {
-                        this.genotype[index] +=1 
+                        this.genotype[index][0] +=1 
                     }
                     else
                     {
-                        this.genotype[index] -=1 
+                        this.genotype[index][0] -=1 
                     }
 
                 }
                 else
                 {
-                    if (this.genotype[index] == 8)
+                    if (this.genotype[index][0] == 8)
                     {
-                        this.genotype[index] -=1 
+                        this.genotype[index][0] -=1 
                     }
                     else //it has only 1 n so increase
                     {
-                        this.genotype[index] +=1 
+                        this.genotype[index][0] +=1 
                     }
                 }
 
+            }
+            if (Math.random() <= 0.5)
+            {
+              this.genotype[index][1] = activations[Math.floor(Math.random() * activations.length)]; //get a random activation form the pool
             }
         }
       }
@@ -1281,6 +1304,9 @@ Population.prototype.generate = function() {
     this.initialize();
     this.genes.sort(compareFitness);
     this.solution = population.genes[0].fitness; // pick the solution;
+    best_indivi_length.push(population.genes[0].genotype.length);
+    console.log("Length of all  previous best shaped individuals");
+    console.log(best_indivi_length);
     //console.log("After cross and mutation, best: " + this.genes[0].genotype +" fitness: "+this.genes[0].fitness)
     //console.log("After cross and mutation, best: " + this.genes)
   
@@ -1553,7 +1579,7 @@ function reset(onStartup=false) {
   let outputActivation = (state.problem === Problem.REGRESSION) ?
       nn.Activations.LINEAR : nn.Activations.TANH;
   network = nn.buildNetwork(shape, state.activation, outputActivation,
-      state.regularization, constructInputIds(), state.initZero);
+      state.regularization, constructInputIds(), state.initZero, state.activations);
   lossTrain = getLoss(network, trainData);
   lossTest = getLoss(network, testData);
   drawNetwork(network);
