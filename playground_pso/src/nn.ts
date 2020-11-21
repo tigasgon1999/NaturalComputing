@@ -216,7 +216,9 @@ export function buildNetwork(
     networkShape: number[], activation: ActivationFunction,
     outputActivation: ActivationFunction,
     regularization: RegularizationFunction,
-    inputIds: string[], initZero?: boolean, activations?:ActivationFunction[]): Node[][] {
+    inputIds: string[], initZero?: boolean, activations?:ActivationFunction[][]): Node[][] {
+  console.log("Activation array:");
+  console.log(activations);
   let numLayers = networkShape.length;
   let id = 1;
   /** List of layers, with each layer being a list of nodes. */
@@ -261,10 +263,24 @@ export function buildNetwork(
           isOutputLayer ? outputActivation : activation, initZero);
       }
       else
-      {
-        let currentAct = activations[layerIdx];
-        node = new Node(nodeId,
-          isOutputLayer ? outputActivation : currentAct, initZero);
+      {  
+        console.log("Activation array in func:");
+        console.log(activations);
+        console.log("Activation array of layer: " +layerIdx);
+        console.log(activations[layerIdx])
+        if (isOutputLayer)
+        {
+          node = new Node(nodeId,outputActivation, initZero);
+        }
+        else
+        {
+          console.log("Activation array of layer and node:");
+          console.log(activations[layerIdx][i])
+          console.log("Successs");
+          let currentAct = activations[layerIdx][i];
+          node = new Node(nodeId,
+            isOutputLayer ? outputActivation : currentAct, initZero);
+        }
       }
       currentLayer.push(node);
       if (layerIdx >= 1) {
