@@ -216,13 +216,33 @@ export function buildNetwork(
     networkShape: number[], activation: ActivationFunction,
     outputActivation: ActivationFunction,
     regularization: RegularizationFunction,
-    inputIds: string[], initZero?: boolean): Node[][] {
+    inputIds: string[], initZero?: boolean, activations?:ActivationFunction[]): Node[][] {
   let numLayers = networkShape.length;
   let id = 1;
   /** List of layers, with each layer being a list of nodes. */
   let network: Node[][] = [];
   for (let layerIdx = 0; layerIdx < numLayers; layerIdx++) {
+    //console.log("Num layers: ", numLayers);
     let isOutputLayer = layerIdx === numLayers - 1;
+    //console.log("Activation for layerIdx: " + layerIdx);
+    // if (isOutputLayer)
+    // {
+    //   console.log(outputActivation.output(1));
+    // }
+    // else
+    // {
+    //   console.log(typeof activations == 'undefined' || activations.length == 0);
+    //   if (typeof activations == 'undefined' || activations.length == 0){
+    //     console.log(activation.output(1));
+    //   }
+    //   else
+    //   {
+    //     console.log("Num activations: ", activations.length);
+    //     console.log("CGP active");
+    //     console.log(activations[layerIdx].output(1));
+    //   }
+
+    // }
     let isInputLayer = layerIdx === 0;
     let currentLayer: Node[] = [];
     network.push(currentLayer);
@@ -234,8 +254,18 @@ export function buildNetwork(
       } else {
         id++;
       }
-      let node = new Node(nodeId,
+      let node;
+      if (typeof activations == 'undefined' || activations.length == 0)
+      {
+        node = new Node(nodeId,
           isOutputLayer ? outputActivation : activation, initZero);
+      }
+      else
+      {
+        let currentAct = activations[layerIdx];
+        node = new Node(nodeId,
+          isOutputLayer ? outputActivation : currentAct, initZero);
+      }
       currentLayer.push(node);
       if (layerIdx >= 1) {
         // Add links from nodes in the previous layer to this node.
