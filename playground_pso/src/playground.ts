@@ -929,8 +929,8 @@ function constructInput(x: number, y: number): number[] {
 function optimize_through_GA() {
 console.log("In GA")
 const cross_prob = 0.9
-var mutationPr = 0.2
-const noIter = 25
+var mutationPr = 0.75
+const noIter = 75
 const pop_size = 16
 const no_best_to_show = 16
 const no_epochs = 5
@@ -947,12 +947,12 @@ var Item = function(num_hidden_layers, shape) {
   }
 
 var items = [];
-items.push(new Item(1, [[2,"rbf"],[1,"rbf"],[1,"sigmoid"]]));
-items.push(new Item(1, [[2,"rbf"],[2,"rbf"],[1,"sigmoid"]]));
-items.push(new Item(1, [[2,"rbf"],[3,"rbf"],[1,"sigmoid"]]));
-items.push(new Item(1, [[2,"rbf"],[5,"rbf"],[1,"sigmoid"]]));
-items.push(new Item(1, [[2,"rbf"],[4,"rbf"],[1,"sigmoid"]]));
-let activations = ['relu', 'tanh', 'sin', 'rbf', 'sigmoid']
+items.push(new Item(1, [[2,["rbf","rbf"]],[1,["rbf"]],[1,"sigmoid"]]));
+items.push(new Item(1, [[2,["rbf","rbf"]],[2,["rbf","rbf"]],[1,"sigmoid"]]));
+items.push(new Item(1, [[2,["rbf","rbf"]],[3,["rbf","rbf","rbf"]],[1,"sigmoid"]]));
+items.push(new Item(1, [[2,["rbf","rbf"]],[5,["rbf","rbf","rbf","rbf","rbf"]],[1,"sigmoid"]]));
+items.push(new Item(1, [[2,["rbf","rbf"]],[4,["rbf","rbf","rbf","rbf"]],[1,"sigmoid"]]));
+let activations = ['relu', 'linear', 'rbf', 'sigmoid']
 let best_indivi_length = []
 
 var string_to_act = {
@@ -978,6 +978,8 @@ Gene.prototype.encode = function(phenotype) {
 //calculates the fitness function of the gene => replace this with fitness loss function feedforward from nn.
 Gene.prototype.calcFitness = function() {
     var scope = this;
+    console.log("Current population: ");
+    console.log(this.genotype);
     //console.log("Fitness for: ", this.genotype);
 
     //initialize NN structure
@@ -989,7 +991,12 @@ Gene.prototype.calcFitness = function() {
     }
     for(let i = 0; i < this.genotype.length-1;i++)
     {
-      state.activations.push(string_to_act[this.genotype[i][1]]);
+      let layer_activs = []
+      for(let j=0;j<this.genotype[i][1].length;j++)
+      {
+        layer_activs.push(string_to_act[this.genotype[i][1][j]]);
+      }
+      state.activations.push(layer_activs);
     }
     //clear all inputs
     for (let nodeId in INPUTS)
@@ -1095,7 +1102,18 @@ Gene.prototype.onePointCrossOver = function(crossOverPr, anotherGene) {
         offSpring2.genotype = this.genotype;
         //this encourages exploration
         offSpring1.genotype[1][0] = Math.floor((this.genotype[1][0] + anotherGene.genotype[1][0]) / 2)
-        offSpring1.genotype[1][1] = this.fitness > anotherGene.fitness ? this.genotype[1][1] : anotherGene.genotype[1][1];
+        if(this.genotype[1][1].length <= anotherGene.genotype[1][1].length)
+        {
+          offSpring1.genotype[1][1] = (this.genotype[1][1].concat(anotherGene.genotype[1][1].slice(this.genotype[1][1].length))).slice(0, offSpring1.genotype[1][0])
+        }
+        else
+        {
+          offSpring1.genotype[1][1] = (anotherGene.genotype[1][1].concat(this.genotype[1][1].slice(anotherGene.genotype[1][1].length))).slice(0, offSpring1.genotype[1][0])
+
+        }
+        console.log("After cross:");
+        console.log(offSpring1.genotype[1]);
+        //offSpring1.genotype[1][1] = this.fitness > anotherGene.fitness ? this.genotype[1][1] : anotherGene.genotype[1][1];
         //this is greedier
         offSpring2.genotype[1][0] = this.fitness > anotherGene.fitness ? this.genotype[1][0] : anotherGene.genotype[1][0];//Math.floor(Math.abs(this.fitness) * this.genotype[1] + (1-Math.abs(anotherGene.fitness)) * anotherGene.genotype[1])
         offSpring2.genotype[1][1] = this.fitness > anotherGene.fitness ? this.genotype[1][1] : anotherGene.genotype[1][1];
@@ -1167,7 +1185,7 @@ Gene.prototype.mutate = function() {
               {
                 if (this.genotype.length < 8) //max 8 layers
                 {
-                  this.genotype.splice(1, 0, [4,'rbf']);
+                  this.genotype.splice(1, 0, [2,['rbf', 'rbf']]);
                 }
                 else
                 {
@@ -1180,7 +1198,7 @@ Gene.prototype.mutate = function() {
             else
             {
                 //if array on length 3 (minimum), then add a layer
-                this.genotype.splice(1, 0, [4,'rbf']); //adding a layer with 4 neurons
+                this.genotype.splice(1, 0, [2,['rbf', 'rbf']]); //adding a layer with 4 neurons
             }
             already_mutated_dim = true;
         }
@@ -1193,10 +1211,12 @@ Gene.prototype.mutate = function() {
                 if (this.genotype[0][0] == 4)
                 {
                   this.genotype[0][0] == 2
+                  this.genotype[0][1] == this.genotype[0][1].slice(2);
                 }
                 else
                 {
                   this.genotype[0][0] = 4
+                  this.genotype[0][1].push('rbf');this.genotype[0][1].push('rbf');
                 }
 
             }
@@ -1206,11 +1226,17 @@ Gene.prototype.mutate = function() {
                 {
                     if (Math.random() >= 0.5)
                     {
-                        this.genotype[index][0] +=1 
+                        console.log("In mutation + :");
+                        console.log(this.genotype[index]);
+                        this.genotype[index][0] +=1 ;
+                        this.genotype[index][1].push('rbf');
                     }
                     else
                     {
-                        this.genotype[index][0] -=1 
+                        console.log("In mutation + :");
+                        console.log(this.genotype[index]);
+                        this.genotype[index][0] -=1 ;
+                        this.genotype[index][1].pop();
                     }
 
                 }
@@ -1218,18 +1244,30 @@ Gene.prototype.mutate = function() {
                 {
                     if (this.genotype[index][0] == 8)
                     {
-                        this.genotype[index][0] -=1 
+                        console.log("In mutation + :");
+                        console.log(this.genotype[index]);
+                        this.genotype[index][0] -=1 ;
+                        this.genotype[index][1].pop();
                     }
                     else //it has only 1 n so increase
                     {
-                        this.genotype[index][0] +=1 
+                        console.log("In mutation + :");
+                        console.log(this.genotype[index]);
+                        this.genotype[index][0] +=1 ;
+                        this.genotype[index][1].push('rbf');
                     }
                 }
 
             }
             if (Math.random() <= 0.5)
             {
-              this.genotype[index][1] = activations[Math.floor(Math.random() * activations.length)]; //get a random activation form the pool
+              for(let  j=0;j < this.genotype[index][1].length;j++)
+              {
+                if (Math.random() <= 0.5)
+                {
+                  this.genotype[index][1][j] = activations[Math.floor(Math.random() * activations.length)]; //get a random activation form the pool
+                }
+              }
             }
         }
       }
