@@ -1,4 +1,6 @@
 # Natural Computing Coursework 2
+Coursework for the Natural Computing course in the MSc Artificial Intelligence at University of Edinburgh (2020/2021).
+
 ### Task 1
 The code (that is important to the grading) for the PSO is in `task1_playground/src/pso.ts`, where you can see the new fitness function.
 
