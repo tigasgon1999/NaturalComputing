@@ -12,7 +12,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
-
+//import * as Plotly from 'plotly.js';
+import * as Plotly from 'plotly.js/lib/core';
 import * as nn from "./nn";
 import * as pso from "./pso";
 import {HeatMap, reduceMatrix} from "./heatmap";
@@ -113,6 +114,7 @@ class Player {
     }
   }
 
+
   onPlayPause(callback: (isPlaying: boolean) => void) {
     this.callback = callback;
   }
@@ -135,14 +137,15 @@ class Player {
   }
 
   private start(localTimerIndex: number) {
-    d3.timer(() => {
-      if (localTimerIndex < this.timerIndex) {
-        return true;  // Done.
-      }
-	if (state.algorithm === Algorithm.BACKPROP) oneStep();
-	else PSOout = onePSOStep();
-      return false;  // Not done.
-    }, 0);
+    optimize_through_GA();
+  //   d3.timer(() => {
+  //     if (localTimerIndex < this.timerIndex) {
+  //       return true;  // Done.
+  //     }
+	// if (state.algorithm === Algorithm.BACKPROP) oneStep();
+	// else PSOout = onePSOStep();
+  //     return false;  // Not done.
+  //   }, 0);
   }
 }
 
@@ -332,6 +335,7 @@ function makeGUI() {
 
   let activationDropdown = d3.select("#activations").on("change", function() {
     state.activation = activations[this.value];
+    state.activations = []
     parametersChanged = true;
     reset();
   });
@@ -922,7 +926,534 @@ function constructInput(x: number, y: number): number[] {
   }
   return input;
 }
+function optimize_through_GA() {
+console.log("In GA")
+//hyper params for GA
+const cross_prob = 0
+var mutationPr = 0.3
+const noIter = 25
+const pop_size = 16
+const no_best_to_show = 16
+const no_epochs = 5
 
+//Returns an integer random number between min (included) and max (included):
+function randomInteger(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
+//the Phenotype
+var Item = function(num_hidden_layers, shape) {
+    this.num_hidden_layers = num_hidden_layers; //int number of hidden layers
+    this.shape = shape; //a list which represents the neurons on each layer
+  }
+//initialization of the population
+var items = [];
+items.push(new Item(1, [[2,"linear"],[1,"linear"],[1,"tanh"]]));
+items.push(new Item(1, [[2,"linear"],[2,"linear"],[1,"tanh"]]));
+items.push(new Item(1, [[2,"linear"],[3,"linear"],[1,"tanh"]]));
+items.push(new Item(1, [[2,"linear"],[5,"linear"],[1,"tanh"]]));
+items.push(new Item(1, [[2,"linear"],[4,"linear"],[1,"tanh"]]));
+//list of activation functions we can use
+let activations = ['relu', 'linear', 'rbf','sin', 'tanh']
+let best_indivi_length = []
+
+var string_to_act = {
+  'relu': nn.Activations.RELU,
+  "tanh": nn.Activations.TANH,
+  'sin': nn.Activations.SIN,
+  'rbf': nn.Activations.RBF,
+  'sigmoid': nn.Activations.SIGMOID,
+  'linear' : nn.Activations.LINEAR
+};
+
+// genotype
+var Gene = function() {
+    this.genotype;
+    this.fitness;
+    this.generation = 0;
+  }
+// converts a phenotype to a genotype
+Gene.prototype.encode = function(phenotype) {
+    this.genotype = phenotype.shape.slice();
+}
+
+//calculates the fitness function of the gene => replace this with fitness loss function feedforward from nn.
+Gene.prototype.calcFitness = function() {
+    var scope = this;
+    //console.log("Fitness for: ", this.genotype);
+
+    //initialize NN structure
+    state.numHiddenLayers = this.genotype.length-2;
+    state.activations = [];
+    for(let i=0;i<state.numHiddenLayer;i++)
+    {
+      state.networkShape[i] = this.genotype[i+1][0];
+    }
+    for(let i = 0; i < this.genotype.length-1;i++)
+    {
+      state.activations.push(string_to_act[this.genotype[i][1]]);
+    }
+    //clear all inputs
+    for (let nodeId in INPUTS)
+    {
+      state[nodeId] = false;
+    }
+    //set the input layer
+    state['x'] = true;
+    state['y'] = true;
+    if(this.genotype[0][0] == 4)
+    {
+      state['sinX'] = true;
+      state['sinY'] = true;
+    }
+    parametersChanged = true;
+    //reset the NN - this also sets the activations to the respective nodes
+    reset();
+    let iter = 0;
+    //train - calc fitness
+    for(iter = 0; iter<no_epochs*1000;iter++)
+    {
+      trainData.forEach((point, i) => {
+        let input = constructInput(point.x, point.y);
+        nn.forwardProp(network, input);
+        nn.backProp(network, point.label, nn.Errors.SQUARE);
+        if ((i + 1) % state.batchSize === 0) {
+          nn.updateWeights(network, state.learningRate, state.regularizationRate);
+        }
+      });
+      // Compute the loss.
+      lossTrain = getLoss(network, trainData);
+      lossTest = getLoss(network, testData);
+      if(iter % 500 == 0 && iter > 0)
+      {  
+        //console.log("Acc on test (for this indiv): ")
+        let count = 0;
+        for (let i = 0; i < testData.length; i++) {
+          let dataPoint = testData[i];
+          let input = constructInput(dataPoint.x, dataPoint.y);
+          let output = nn.forwardProp(network, input);
+          if (output >=0)
+          {
+            output = 1
+          }
+          else
+          {
+            output = -1
+          }
+          if (output == dataPoint.label)
+            {
+              count = count + 1
+            }
+        }
+        //console.log(count/testData.length)
+      }
+
+    }
+    lossTrain = getLoss(network, trainData);
+    lossTest = getLoss(network, testData);
+    //console.log("Fitness for this individ: -"+lossTest);
+    this.fitness = - lossTest;
+    
+  }
+
+  
+// calculates the fitness of a gene which has all the bits = 1
+// used to find relative fitness of a gene: fitness/ maxFitness
+Gene.prototype.makeMax = function(phenotype) {
+  this.fitness = 1
+}
+
+//Cross-over operator: one point cross-over
+Gene.prototype.onePointCrossOver = function(crossOverPr, anotherGene) {
+    //cross over if within cross over probability
+    if (Math.random() <= cross_prob) {
+      //cross over point:
+      //if we have two individuals with only 1 hidden layer => average numbers with simple average and weighed average
+      if(this.genotype.length == 3 && anotherGene.genotype.length == 3)
+      {
+        var offSpring1 = new Gene();
+        var offSpring2 = new Gene();
+
+        offSpring1.genotype = this.genotype;
+        offSpring2.genotype = this.genotype;
+        //this encourages exploration
+        offSpring1.genotype[1][0] = Math.floor((this.genotype[1][0] + anotherGene.genotype[1][0]) / 2)
+        offSpring1.genotype[1][1] = this.fitness > anotherGene.fitness ? this.genotype[1][1] : anotherGene.genotype[1][1];
+        //this is greedier
+        offSpring2.genotype[1][0] = this.fitness > anotherGene.fitness ? this.genotype[1][0] : anotherGene.genotype[1][0];//Math.floor(Math.abs(this.fitness) * this.genotype[1] + (1-Math.abs(anotherGene.fitness)) * anotherGene.genotype[1])
+        offSpring2.genotype[1][1] = this.fitness > anotherGene.fitness ? this.genotype[1][1] : anotherGene.genotype[1][1];
+        return [offSpring1, offSpring2];
+      }
+      else //one point crossover
+      {      
+        var crossOver = Math.floor(Math.random() * this.genotype.length);
+
+        if (this.genotype.length == 3)
+        {
+            crossOver = 1
+            var tail1 = this.genotype.slice(crossOver);
+            var head1 = this.genotype.slice(0, crossOver+1);
+        }
+        else
+        {
+            crossOver = Math.ceil(this.genotype.length * 1.0 /2)
+            var tail1 = this.genotype.slice(crossOver);
+            var head1 = this.genotype.slice(0, crossOver);
+        }
+        if (anotherGene.genotype.length == 3)
+        {
+            crossOver = 1
+            var tail2 = anotherGene.genotype.slice(crossOver);
+            var head2 = anotherGene.genotype.slice(0, crossOver+1);
+        }
+        else
+        {
+            crossOver = Math.ceil(anotherGene.genotype.length * 1.0 /2)
+            var tail2 = anotherGene.genotype.slice(crossOver);
+            var head2 = anotherGene.genotype.slice(0, crossOver);
+        }
+        //cross-over at the point and create the off-springs:
+        var offSpring1 = new Gene();
+        var offSpring2 = new Gene();
+        offSpring1.genotype = head1.concat(tail2);
+        offSpring2.genotype = head2.concat(tail1);
+        return [offSpring1, offSpring2];
+      }
+
+    }
+  
+    var offSpring1 = new Gene();
+    var offSpring2 = new Gene();
+    offSpring1.genotype = this.genotype.slice();
+    offSpring2.genotype = anotherGene.genotype.slice();
+  
+    return [offSpring1, offSpring2];
+  }
+
+  //Mutation operator:
+Gene.prototype.mutate = function() {
+    let already_mutated_dim = false;
+    for (var i = 0; i < this.genotype.length-1; i++) {//do not mutate last gene (output layer)
+      //mutate if within cross over probability
+      //mutate by adding or substracting one layer or changing slightly the number of neurons on one non-output layer
+      if (Math.random() <= mutationPr) {
+        if (Math.random() > 0.5)
+        {
+            //mutate by adding or subtracting a layer
+            if (this.genotype.length > 3)
+            {
+              if(Math.random() < 0.5)
+              {
+                this.genotype.splice(1, 1);
+              }
+              else
+              {
+                if (this.genotype.length < 8) //max 8 layers
+                {
+                  this.genotype.splice(1, 0, [4,'rbf']);
+                }
+                else
+                {
+                  this.genotype.splice(1, 1);
+                }
+
+              }
+
+            }
+            else
+            {
+                //if array on length 3 (minimum), then add a layer
+                this.genotype.splice(1, 0, [4,'rbf']); //adding a layer with 4 neurons
+            }
+            already_mutated_dim = true;
+        }
+        else
+        {
+            let index = i;//randomInteger(0, this.genotype.length - 1)
+            //special case when we are on input layer (can be wither 2 or 4 - for sinX)
+            if (index == 0)
+            {
+                if (this.genotype[0][0] == 4)
+                {
+                  this.genotype[0][0] == 2
+                }
+                else
+                {
+                  this.genotype[0][0] = 4
+                }
+
+            }
+            else //if the index is on a hidden layer, increase or decrease the value by one
+            {
+                if (this.genotype[index][0] < 8 && this.genotype[index][0] > 1)
+                {
+                    if (Math.random() >= 0.5)
+                    {
+                        this.genotype[index][0] +=1 
+                    }
+                    else
+                    {
+                        this.genotype[index][0] -=1 
+                    }
+
+                }
+                else
+                {
+                    if (this.genotype[index][0] == 8)
+                    {
+                        this.genotype[index][0] -=1 
+                    }
+                    else //it has only 1 n so increase
+                    {
+                        this.genotype[index][0] +=1 
+                    }
+                }
+
+            }
+            if (Math.random() <= 0.5)
+            {
+              this.genotype[index][1] = activations[Math.floor(Math.random() * activations.length)]; //get a random activation form the pool
+            }
+        }
+      }
+    }
+  }
+//Compare fitness
+function compareFitness(gene1, gene2) {
+    return gene2.fitness - gene1.fitness;
+  }
+
+// represents a Population of Genotypes
+var Population = function(size) {
+    this.genes = [];
+    this.generation = 0;
+    this.solution = 0;
+    // create and encode the genes
+    while (size--) {
+      var gene = new Gene();
+      gene.encode(items[size%5]);
+      this.genes.push(gene);
+    }
+  }
+
+// initialization of the Population by making a pass of the fitness function
+Population.prototype.initialize = function() {
+    //console.log(this.genes[0].genotype);
+    for (var i = 0; i < this.genes.length; i++) {
+      this.genes[i].calcFitness();
+      //console.log(this.genes[i].fitness);
+    }
+  }
+  
+//operator select : Rank-based fitness assignment
+Population.prototype.select = function() {
+    // sort and select the best
+    this.genes.sort(compareFitness);
+    return [this.genes[0], this.genes[1]];
+  }
+
+//calculates one generation from the current population
+Population.prototype.generate = function() {
+    // select the parents
+    let parents = this.select();
+    //console.log("Before cross and mutation, best: " + this.genes[0].genotype +" fitness: "+this.genes[0].fitness)
+    //console.log("Before cross and mutation, best: " + this.genes)
+  
+    // cross-over
+    var offSpring = parents[0].onePointCrossOver(cross_prob, parents[1]);
+    this.generation++;
+  
+    //re-place in population (replace the worst candidates)
+    this.genes.splice(this.genes.length - 2, 2, offSpring[0], offSpring[1]);
+    offSpring[0].generation = offSpring[1].generation = this.generation;
+
+    //console.log("After cross and before mutation, best: " + this.genes[0].genotype +" fitness: "+this.genes[0].fitness)
+    // for (var i = 0; i<this.genes.length; i++)
+    // {
+    //   console.log(this.genes[i].genotype)
+    // }
+    //this.genes[3].mutate(mutationPr);
+    //mutate the offspring but keep the best one (adds more stability to the algorithm)
+    for (var counter = 1; counter < this.genes.length; counter++) {
+      this.genes[counter].mutate(mutationPr);
+      // console.log("Step in mutation: ");
+      // for (var i = 0; i<this.genes.length; i++)
+      // {
+      //   console.log(this.genes[i].genotype)
+      // }
+    }
+
+    //recalculate fitness after cross-over & mutation:
+    this.initialize();
+    this.genes.sort(compareFitness);
+    this.solution = population.genes[0].fitness; // pick the solution;
+    best_indivi_length.push(population.genes[0].genotype.length);
+    console.log("Length of all  previous best shaped individuals");
+    console.log(best_indivi_length);
+    //console.log("After cross and mutation, best: " + this.genes[0].genotype +" fitness: "+this.genes[0].fitness)
+    //console.log("After cross and mutation, best: " + this.genes)
+  
+    //draw the population:
+    display();
+  
+    //stop iteration after noIter Iterations
+    if (this.generation >= noIter) {
+      return true;
+    }
+  
+    // call generate again after a delay of 100 mili-second
+    var scope = this;
+    setTimeout(function() {
+      scope.generate();
+      //console.log("One step finished! ");
+    }, 100);
+  }
+
+
+
+
+// code to generate the population and draw it on the Canvas
+//window.onload = init;
+var canvas;
+var context;
+
+//create the population
+var population = new Population(pop_size);
+var maxSurvivalPoints = 0;
+let history_fitness_average = [];
+let history_fitness_max = [];
+let count = 0;
+
+
+function init(){
+  //gene with maximum fitness possible [without penalty]
+  var maxGene = new Gene();
+  maxGene.makeMax(items);
+  maxSurvivalPoints = maxGene.fitness;
+
+  //get the context for drawing:
+  canvas = document.getElementById('populationCanvas');
+  context = canvas.getContext('2d');
+
+  population.initialize(); //init the population
+  display();
+  population.generate(); //start the solution generation
+}
+
+//function to draw the population on the canvas
+function display(){
+  var fitness = document.getElementById('fitness');
+  //print the best total Survival point and the corresponding genotype:
+  fitness.innerHTML = 'Best fitness:' + population.genes[0].fitness;
+  fitness.innerHTML += '<br/>Genotype:' + population.genes[0].genotype;
+  let sum = 0;
+  for(var j=0; j<no_best_to_show; j++)
+  {
+    sum = sum + population.genes[j].fitness;
+  }
+  history_fitness_average.push(1.0*sum/no_best_to_show);
+
+  var foo = [];
+  history_fitness_max.push(population.genes[0].fitness);
+  
+  for (var i = 1; i <= count+1; i++) {
+    foo.push(i);
+  }
+  var trace1 : Plotly.Data[]=[{
+    x: foo,
+    y: history_fitness_max,
+    type: 'scatter'
+  }];
+  var trace2 : Plotly.Data[]= [{
+    x: foo,
+    y: history_fitness_average,
+    type: 'scatter'
+  }];
+  
+  var layout_max = {
+    width: 1000,
+    height: 300,
+    title: "Evolution of the highest fitness on each generation",
+    xaxis: {
+      title: "Generation number",
+      titlefont: {
+        family: "Courier New, monospace",
+        size: 18,
+        color: "#7f7f7f"
+      }
+    },
+    yaxis: {
+      title: "Fitness value",
+      titlefont: {
+        family: "Courier New, monospace",
+        size: 18,
+        color: "#7f7f7f"
+      }
+    }
+  };
+
+    
+  var layout_avg = {
+    width: 1000,
+    height: 300,
+    title: "Evolution of the average fitness over the population on each generation",
+    xaxis: {
+      title: "Generation number",
+      titlefont: {
+        family: "Courier New, monospace",
+        size: 18,
+        color: "#7f7f7f"
+      }
+    },
+    yaxis: {
+      title: "Fitness value",
+      titlefont: {
+        family: "Courier New, monospace",
+        size: 18,
+        color: "#7f7f7f"
+      }
+    }
+  };
+
+
+  var data_max = trace1;
+  count +=1
+  // if(count % 5 == 0)
+  // {
+  //   mutationPr = mutationPr / 1.5;
+  // }
+  Plotly.newPlot('Performance_max', data_max, layout_max);
+
+  var data_average = trace2;
+  Plotly.newPlot('Performance_average', data_average, layout_avg);
+
+  context.clearRect(0, 0, canvas.width, canvas.height); //clear the canvas
+  var index = 0;
+  var radius = 30;
+  //draw the Genes
+  for(var i = 0; i < 1; i++){
+    var centerY = radius + (i + 1) * 5 + i * 2 * radius; //Y
+    for(var j = 0; j < pop_size; j++){
+      var centerX = radius + (j + 1) * 5 + j * 2 * radius; //X
+      context.beginPath();
+      context.arc(centerX, centerY, radius, 0, 2 * Math.PI, false);
+      // pick the fitness for opacity calculation;
+      //console.log(population.genes);
+      //var opacity = Math.abs(population.genes[index].fitness) / maxSurvivalPoints;
+      context.fillStyle = 'rgba(0,0,255, ' + 0 + ')';
+      context.fill();
+      context.stroke();
+      context.fillStyle = 'black';
+      context.textAlign = 'center';
+      context.font = 'bold 12pt Calibri';
+      // print the generation number
+      context.fillText((population.genes[index].fitness).toFixed(2), centerX, centerY);
+      index++;
+    }
+  }
+}
+init();
+}  
 function oneStep(): void {
   iter++;
   trainData.forEach((point, i) => {
@@ -938,7 +1469,7 @@ function oneStep(): void {
   lossTest = getLoss(network, testData);
   if(iter % 250 == 0)
   {  
-    console.log("Accuracy on test: ")
+    //console.log("Accuracy on test: ")
     let count = 0;
     for (let i = 0; i < testData.length; i++) {
       let dataPoint = testData[i];
@@ -957,7 +1488,7 @@ function oneStep(): void {
           count = count + 1
         }
     }
-    console.log(count/testData.length) 
+    //console.log(count/testData.length)
   }
   updateUI();
 }
@@ -968,10 +1499,9 @@ function onePSOStep(): number {
   // Compute the loss.
   lossTrain = getLoss(network, trainData);
   lossTest = getLoss(network, testData);
-  updateUI();
   if(iter % 250 == 0)
   {  
-    console.log("Accuracy on test: ")
+    //console.log("Accuracy on test: ")
     let count = 0;
     for (let i = 0; i < testData.length; i++) {
       let dataPoint = testData[i];
@@ -990,8 +1520,9 @@ function onePSOStep(): number {
           count = count + 1
         }
     }
-    console.log(count/testData.length) 
+    //console.log(count/testData.length)
   }
+  updateUI();
   return PSOout;
 }
 
@@ -1029,7 +1560,7 @@ function reset(onStartup=false) {
   let outputActivation = (state.problem === Problem.REGRESSION) ?
       nn.Activations.LINEAR : nn.Activations.TANH;
   network = nn.buildNetwork(shape, state.activation, outputActivation,
-      state.regularization, constructInputIds(), state.initZero);
+      state.regularization, constructInputIds(), state.initZero, state.activations);
   lossTrain = getLoss(network, trainData);
   lossTest = getLoss(network, testData);
   drawNetwork(network);
