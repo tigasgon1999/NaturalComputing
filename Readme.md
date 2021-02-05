@@ -1,4 +1,4 @@
-# Natural Computing Coursework 2
+# PSO, GA and GP for Neural Network architectures
 Coursework for the Natural Computing course in the MSc Artificial Intelligence at University of Edinburgh (2020/2021).
 
 Group: Tiago Lé (https://github.com/tigasgon1999) and Tidor Pricope (https://github.com/TidorP)
